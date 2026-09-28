@@ -221,7 +221,60 @@ async function login(type){
 }
 
 async function loadCurrentProfile(expected){
-  const {data:{user}}=await sb.auth.getUser();
+  const { data: { user }, error: authError } =
+    await sb.auth.getUser();
+
+  if(authError) throw authError;
+
+  if(!user){
+    showAuth();
+    return;
+  }
+
+  const { data: profile, error } = await sb
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if(error) throw error;
+
+  if(!profile){
+    await sb.auth.signOut();
+
+    throw new Error(
+      "Tài khoản chưa có hồ sơ trong hệ thống. " +
+      "Vui lòng liên hệ Admin để được hỗ trợ."
+    );
+  }
+
+  if(profile.status === "locked"){
+    await sb.auth.signOut();
+
+    throw new Error("Tài khoản đã bị Admin khóa");
+  }
+
+  if(expected === "admin" && profile.role !== "admin"){
+    await sb.auth.signOut();
+
+    throw new Error(
+      "Tài khoản này không có quyền Admin"
+    );
+  }
+
+  if(expected === "member" && profile.role === "admin"){
+    await sb.auth.signOut();
+
+    throw new Error(
+      "Tài khoản Admin hãy đăng nhập ở cổng Admin"
+    );
+  }
+
+  currentUser = user;
+  currentProfile = profile;
+
+  openApp();
+}  const {data:{user}}=await sb.auth.getUser();
   if(!user){showAuth();return}
   const {data:profile,error}=await sb.from("profiles").select("*").eq("id",user.id).single();
   if(error)throw error;
